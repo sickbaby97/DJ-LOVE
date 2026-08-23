@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-每周增量下载：SoundCloud 直接下载 + Spotify 导出歌单
+DJ-LOVE 音乐下载：Spotify + SoundCloud 收藏 → MP3 320kbps
 
 Spotify 歌曲通过 YouTube 搜索下载（需要浏览器 cookies）。
-如果 cookies 不可用，则仅导出 Spotify 歌单为 URL 列表供手动下载。
 
 用法:
-  python3 music_weekly.py
+  python3 music_weekly.py            # 下载所有未下载的新收藏
+  python3 music_weekly.py --today    # 只下载今天点心的歌
 """
 
 import json
@@ -14,7 +14,7 @@ import os
 import sys
 import time
 import subprocess
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 
 ARCHIVE_DIR = Path.home() / "Music" / "BIXY DJ"
@@ -33,13 +33,12 @@ def save_state(state):
     STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def get_week_folder():
-    today = datetime.now(timezone.utc).date()
-    monday = today - timedelta(days=today.weekday())
-    return monday.strftime("%Y-%m-%d")
+def get_folder():
+    """返回当天日期文件夹名: 2026-08-24"""
+    return datetime.now(timezone.utc).date().strftime("%Y-%m-%d")
 
 
-def get_new_spotify_likes(state):
+def get_new_spotify_likes(state, today_only=False):
     client_id = os.getenv("SPOTIFY_CLIENT_ID")
     client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
     if not client_id or not client_secret:
@@ -64,6 +63,8 @@ def get_new_spotify_likes(state):
     new_tracks = []
     offset, limit = 0, 50
 
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
     print("[Spotify] 扫描 Liked Songs ...")
     while True:
         results = sp.current_user_saved_tracks(limit=limit, offset=offset)
@@ -77,13 +78,17 @@ def get_new_spotify_likes(state):
             tid = t["id"]
             if tid in known_ids:
                 continue
-            known_ids[tid] = item["added_at"]
+            added_at = item["added_at"]
+            known_ids[tid] = added_at
+            # --today 模式：只保留今天收藏的
+            if today_only and not added_at.startswith(today_str):
+                continue
             new_tracks.append({
                 "id": tid,
                 "name": t["name"],
                 "artists": [a["name"] for a in t["artists"]],
                 "album": t["album"]["name"],
-                "added_at": item["added_at"],
+                "added_at": added_at,
                 "url": t["external_urls"].get("spotify", ""),
             })
         offset += limit
@@ -189,12 +194,14 @@ def download_spotify_via_youtube(track, folder):
 
 
 def main():
+    today_only = "--today" in sys.argv
+
     state = load_state()
-    week = get_week_folder()
-    folder = ARCHIVE_DIR / week
+    folder = ARCHIVE_DIR / get_folder()
     folder.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n📁 {week}\n{'=' * 40}")
+    mode = "📅 仅今日收藏" if today_only else "🆕 所有新收藏"
+    print(f"\n📁 {folder.name}  ·  {mode}\n{'=' * 40}")
 
     # ── SoundCloud (直接下载) ──
     new_sc = get_new_soundcloud_likes(state)
@@ -208,7 +215,7 @@ def main():
             print(f"         ⚠️ 失败")
 
     # ── Spotify ──
-    new_sp = get_new_spotify_likes(state)
+    new_sp = get_new_spotify_likes(state, today_only=today_only)
     sp_ok = 0
     for i, t in enumerate(new_sp):
         artists = ", ".join(t["artists"])
@@ -222,7 +229,7 @@ def main():
     # ── 导出 Spotify 歌单 (供手动下载) ──
     if new_sp:
         urls_file = folder / "Spotify歌单_URLs.txt"
-        lines = ["# Spotify 本周新增 — 用 spotisaver.net 逐首下载", ""]
+        lines = ["# Spotify 新增 — 用 spotisaver.net 逐首下载", ""]
         for t in new_sp:
             artists = ", ".join(t["artists"])
             lines.append(f"{artists} - {t['name']}")
@@ -233,7 +240,7 @@ def main():
     # ── 歌单摘要 ──
     if new_sc or new_sp:
         summary = folder / "歌单.txt"
-        lines = [f"BIXY DJ — 本周新收藏 {week}", "=" * 40, ""]
+        lines = [f"BIXY DJ — 新收藏 {folder.name}", "=" * 40, ""]
         if new_sp:
             lines.append(f"[Spotify] {sp_ok}/{len(new_sp)} 下载成功")
             for t in new_sp:
@@ -251,7 +258,7 @@ def main():
 
     total = len(new_sp) + len(new_sc)
     print(f"\n{'=' * 40}")
-    print(f"📊 本周新增 {total} 首")
+    print(f"📊 新增 {total} 首")
     print(f"   SoundCloud: {sc_ok}/{len(new_sc)} 下载成功")
     print(f"   Spotify:    {sp_ok}/{len(new_sp)} 下载成功")
     print(f"📁 {folder}")

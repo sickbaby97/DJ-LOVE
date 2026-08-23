@@ -59,7 +59,7 @@ def get_new_spotify_likes(state):
     if not token:
         return []
 
-    sp = spotipy.Spotify(auth_manager=auth)
+    sp = spotipy.Spotify(auth_manager=auth, requests_timeout=30)
     known_ids = state.setdefault("spotify_ids", {})
     new_tracks = []
     offset, limit = 0, 50
@@ -171,7 +171,7 @@ def download_spotify_via_youtube(track, folder):
         "python3", "-m", "yt_dlp",
         "--cookies-from-browser", "edge",
         "--js-runtimes", "node",
-        "-f", "bestaudio",
+        "-f", "bestaudio/best",
         "--extract-audio",
         "--audio-format", "mp3",
         "--audio-quality", "320K",
@@ -180,10 +180,6 @@ def download_spotify_via_youtube(track, folder):
         "--no-playlist", "--no-progress", "--quiet",
         query,
     ]
-    # 尝试用 cookies 文件
-    if COOKIES_FILE.exists():
-        cmd.insert(2, "--cookies")
-        cmd.insert(3, str(COOKIES_FILE))
 
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)

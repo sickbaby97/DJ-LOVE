@@ -143,6 +143,30 @@ def get_new_soundcloud_likes(state):
     return new_tracks
 
 
+def _run_download(cmd, retries=2):
+    """运行下载命令，失败自动重试（应对 429 限流/网络波动）。"""
+    for attempt in range(retries):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            if r.returncode == 0:
+                return True
+            if attempt < retries - 1:
+                print("         🔄 重试...")
+                time.sleep(5)
+            else:
+                err = (r.stderr or r.stdout or "").strip()
+                print(f"         ❌ {err[-400:]}")
+                return False
+        except subprocess.TimeoutExpired:
+            if attempt < retries - 1:
+                print("         ⏱️ 超时，重试...")
+                time.sleep(5)
+            else:
+                print("         ⏱️ 超时(180s)")
+                return False
+    return False
+
+
 def download_soundcloud(track, folder):
     """下载 SoundCloud → MP3 320kbps。"""
     url = track.get("webpage_url", "")
@@ -160,11 +184,7 @@ def download_soundcloud(track, folder):
         "--no-playlist", "--no-progress", "--quiet",
         url,
     ]
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-        return r.returncode == 0
-    except subprocess.TimeoutExpired:
-        return False
+    return _run_download(cmd)
 
 
 def download_spotify_via_youtube(track, folder):
@@ -182,17 +202,12 @@ def download_spotify_via_youtube(track, folder):
         "--audio-quality", "320K",
         "--embed-metadata",
         "--retries", "8",
-        "--sleep-requests", "2",
+        "--sleep-requests", "1",
         "--output", f"{folder}/%(title)s.%(ext)s",
         "--no-playlist", "--no-progress", "--quiet",
         query,
     ]
-
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-        return r.returncode == 0
-    except subprocess.TimeoutExpired:
-        return False
+    return _run_download(cmd)
 
 
 def main():

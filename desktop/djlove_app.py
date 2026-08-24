@@ -29,7 +29,7 @@ class DJLoveApp:
     def __init__(self, root):
         self.root = root
         self.root.title("DJ LOVE")
-        self.root.geometry("520x720")
+        self.root.geometry("520x800")
         self.root.configure(bg=BG)
         self.root.resizable(False, False)
 
@@ -57,21 +57,40 @@ class DJLoveApp:
         tk.Label(self.root, text="Spotify + SoundCloud → MP3 320kbps",
                  font=("Helvetica", 12), fg="#9a86c4", bg=BG).pack()
 
-        # ── 按钮 ──
+        # ── 自动下载状态 ──
+        auto_frame = tk.Frame(self.root, bg="#1a0f2a", highlightthickness=1,
+                              highlightbackground="#2e1f4d")
+        auto_frame.pack(fill="x", padx=28, pady=(14, 0))
+        last_run = self._get_last_run()
+        tk.Label(auto_frame, text="⏰ 自动下载：每周一凌晨 3:00",
+                 font=("Helvetica", 12, "bold"), fg=ACCENT2, bg="#1a0f2a",
+                 anchor="w").pack(fill="x", padx=12, pady=(8, 0))
+        tk.Label(auto_frame, text=f"   上次运行：{last_run}",
+                 font=("Helvetica", 11), fg="#9a86c4", bg="#1a0f2a",
+                 anchor="w").pack(fill="x", padx=12, pady=(2, 8))
+
+        # ── 手动下载按钮 ──
+        tk.Label(self.root, text="手动下载（立即触发）",
+                 font=("Helvetica", 11), fg="#7a6a9e", bg=BG).pack(pady=(14, 6))
+
         btn_frame = tk.Frame(self.root, bg=BG)
-        btn_frame.pack(pady=20)
+        btn_frame.pack()
         self.btn_all = tk.Button(
-            btn_frame, text="🆕 立即下载新收藏", font=("Helvetica", 14, "bold"),
+            btn_frame, text="🆕 立即下载全部新收藏", font=("Helvetica", 14, "bold"),
             bg=ACCENT, fg="white", activebackground="#ff6aa8",
             activeforeground="white", relief="flat", cursor="hand2",
             padx=24, pady=12, command=lambda: self.start_download(today=False))
         self.btn_all.pack(pady=6)
+        tk.Label(btn_frame, text="下载所有还没下载的（含之前积压的）",
+                 font=("Helvetica", 10), fg="#7a6a9e", bg=BG).pack(pady=(0, 6))
         self.btn_today = tk.Button(
-            btn_frame, text="📅 下载今日喜欢", font=("Helvetica", 14, "bold"),
+            btn_frame, text="📅 仅下载今日喜欢", font=("Helvetica", 14, "bold"),
             bg=ACCENT2, fg="#06232b", activebackground="#8aecff",
             activeforeground="#06232b", relief="flat", cursor="hand2",
             padx=24, pady=12, command=lambda: self.start_download(today=True))
         self.btn_today.pack(pady=6)
+        tk.Label(btn_frame, text="只下载今天点心的歌",
+                 font=("Helvetica", 10), fg="#7a6a9e", bg=BG).pack(pady=(0, 4))
 
         # ── 日志 ──
         log_frame = tk.Frame(self.root, bg=BG)
@@ -94,6 +113,23 @@ class DJLoveApp:
 
     def _set_status(self, text):
         self.status.configure(text=text)
+
+    def _get_last_run(self):
+        """读取上次运行时间。"""
+        try:
+            import json
+            state_file = Path.home() / "Music" / "BIXY DJ" / ".state.json"
+            if state_file.exists():
+                state = json.loads(state_file.read_text(encoding="utf-8"))
+                last = state.get("last_run")
+                if last:
+                    # 转成易读格式
+                    from datetime import datetime
+                    dt = datetime.strptime(last[:19], "%Y-%m-%dT%H:%M:%S")
+                    return dt.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            pass
+        return "尚未运行"
 
     def start_download(self, today=False):
         if self.running:

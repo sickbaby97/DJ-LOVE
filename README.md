@@ -7,9 +7,30 @@
 
 <h1 align="center">🎧 DJ-LOVE</h1>
 <p align="center">
-  <b>自动定时下载 Spotify & SoundCloud 收藏到本地 · MP3 320kbps · 按周归档</b><br>
-  <sub>Automated weekly download of your Spotify & SoundCloud likes to local storage — 320kbps MP3, organized by date.</sub>
+  <b>自动定时下载 Spotify & SoundCloud 收藏到本地 · MP3 320kbps · 桌面程序 + 命令行</b><br>
+  <sub>Automated download of your Spotify & SoundCloud likes to local storage — 320kbps MP3, with a native macOS desktop app.</sub>
 </p>
+
+<p align="center">
+  <img src="desktop/cover.png" width="280" alt="DJ LOVE cover" />
+</p>
+
+---
+
+## 🖥️ 桌面程序 / Desktop App
+
+双击即用的 macOS 应用，界面直观，点按钮就下载。
+
+A native macOS app — double-click to launch, click a button to download.
+
+| 按钮 / Button | 作用 / Action |
+|---------------|---------------|
+| 🆕 **立即下载新收藏** | 下载所有未下载的（自动去重）/ Download all new likes |
+| 📅 **下载今日喜欢** | 只下载今天点心的歌 / Download only today's likes |
+| 📋 **实时日志** | 滚动显示下载进度 / Live download log |
+
+> 打包成 `DJ LOVE.app`，带自绘封面 + `.icns` 图标。双击桌面图标即用。
+> Packaged as `DJ LOVE.app` with a custom cover and `.icns` icon.
 
 ---
 
@@ -45,14 +66,15 @@ You like songs on Spotify or SoundCloud → **DJ-LOVE automatically downloads th
 
 | 特性 / Feature | 说明 / Description |
 |---------------|-------------------|
-| ⏰ **定时自动** | 配好 cron，每周固定时间自动跑，不需人工 |
+| 🖥️ **桌面程序** | macOS `.app`，双击即用，点按钮下载 |
+| ⏰ **定时自动** | launchd 定时 + 自动唤醒，错过开机补跑 |
 | 🎵 **双平台** | Spotify 收藏 + SoundCloud 喜欢 |
 | 📦 **MP3 320kbps** | ffmpeg 最高质量转码 |
-| 🆕 **增量下载** | 只下载本周新收藏，不重复 |
-| 📅 **按周归档** | 每周一个文件夹，日期命名 |
+| 🆕 **手动触发** | `djlove` / `djlove --today` 随时下载 |
+| 📅 **按日期归档** | 每天一个文件夹，日期命名 |
+| 🔁 **智能去重** | `.state.json` 追踪，绝不下重 |
 | 🏷️ **ID3 标签** | 封面、艺人、专辑信息自动写入 |
 | 📋 **歌单导出** | 每期自动生成 TXT 歌单 |
-| 🔁 **智能去重** | `.state.json` 追踪，绝不下重 |
 | 🪶 **轻量** | 纯 Python，无需数据库 |
 
 ---
@@ -106,13 +128,25 @@ Spotify 歌曲通过 YouTube 搜索下载。需要浏览器 cookies：
 ### 3. 运行 / Run
 
 ```bash
+# 手动下载所有新收藏
 python3 music_weekly.py
+
+# 只下载今天点心的歌
+python3 music_weekly.py --today
+
+# 或使用快捷命令
+djlove            # 下载所有新收藏
+djlove --today    # 只下载今天喜欢的
 ```
 
 ### 4. 定时 / Schedule
 
 ```bash
-# 每周一凌晨 3:00 / Every Monday 3am
+# macOS 用 launchd（定时 + 错过补跑 + 自动唤醒）
+cp com.bixy.dj-love.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.bixy.dj-love.plist
+
+# Linux 用 cron（每周一凌晨 3:00 / Every Monday 3am）
 echo "0 3 * * 1 /path/to/music_archive_weekly.sh" | crontab -
 ```
 
@@ -151,7 +185,15 @@ echo "0 3 * * 1 /path/to/music_archive_weekly.sh" | crontab -
 DJ-LOVE/
 ├── music_weekly.py           # 主程序 / Main script
 ├── spotify_auth.py           # Spotify 一次性授权 / One-time OAuth
-├── music_archive_weekly.sh   # Cron 包装脚本 / Cron wrapper
+├── music_archive_weekly.sh   # launchd/cron 包装脚本
+├── djlove                    # 命令行快捷方式 / CLI shortcut
+├── com.bixy.dj-love.plist    # macOS launchd 配置
+├── desktop/                  # 桌面程序 / Desktop app
+│   ├── djlove_app.py         # Tkinter GUI
+│   ├── make_cover.py         # 封面生成 / Cover generator
+│   ├── cover.png             # 程序封面
+│   ├── Info.plist            # macOS app 配置
+│   └── launcher.sh           # .app 启动器
 ├── .hermes.md                # AI agent 项目规则
 ├── .gitignore
 └── README.md
@@ -180,6 +222,8 @@ A: 暂不支持。欢迎 PR。
 - [spotipy](https://github.com/spotipy-dev/spotipy) — Spotify Web API
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — 音频下载引擎
 - [ffmpeg](https://ffmpeg.org) — 音频转码
+- [Tkinter](https://docs.python.org/3/library/tkinter.html) — 桌面 GUI
+- [Pillow](https://python-pillow.org) — 封面生成与图像处理
 - Python 3.11+
 
 ---

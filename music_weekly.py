@@ -79,7 +79,7 @@ def get_new_spotify_likes(state, today_only=False):
             if tid in known_ids:
                 continue
             added_at = item["added_at"]
-            known_ids[tid] = added_at
+            # 注意：这里不标记 known_ids，下载成功后才标记
             # --today 模式：只保留今天收藏的
             if today_only and not added_at.startswith(today_str):
                 continue
@@ -130,7 +130,7 @@ def get_new_soundcloud_likes(state):
         sid = str(info.get("id", ""))
         if not sid or sid in known_ids:
             continue
-        known_ids[sid] = info.get("upload_date", "")
+        # 注意：这里不标记 known_ids，下载成功后才标记
         new_tracks.append({
             "id": sid,
             "title": info.get("title", "?"),
@@ -181,13 +181,15 @@ def download_spotify_via_youtube(track, folder):
         "--audio-format", "mp3",
         "--audio-quality", "320K",
         "--embed-metadata",
+        "--retries", "8",
+        "--sleep-requests", "2",
         "--output", f"{folder}/%(title)s.%(ext)s",
         "--no-playlist", "--no-progress", "--quiet",
         query,
     ]
 
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
         return r.returncode == 0
     except subprocess.TimeoutExpired:
         return False
@@ -211,6 +213,8 @@ def main():
         print(f"  [{i+1}/{len(new_sc)}] ☁️  {label[:60]}")
         if download_soundcloud(t, folder):
             sc_ok += 1
+            # 下载成功才标记，失败下次重试
+            state["soundcloud_ids"][t["id"]] = t.get("upload_date", "")
         else:
             print(f"         ⚠️ 失败")
 
@@ -223,6 +227,8 @@ def main():
         print(f"  [{i+1}/{len(new_sp)}] 🎵 {label[:60]}")
         if download_spotify_via_youtube(t, folder):
             sp_ok += 1
+            # 下载成功才标记，失败下次重试
+            state["spotify_ids"][t["id"]] = t["added_at"]
         else:
             print(f"         ⚠️ 失败")
 

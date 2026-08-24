@@ -21,6 +21,8 @@ ARCHIVE_DIR = Path.home() / "Music" / "BIXY DJ"
 STATE_FILE = ARCHIVE_DIR / ".state.json"
 SPOTIFY_CACHE = Path.home() / "Music" / "Archive" / "spotify" / ".spotify_oauth_cache"
 COOKIES_FILE = ARCHIVE_DIR / ".yt_cookies.txt"
+# 代理（国内访问 YouTube/SoundCloud 必需，默认 Clash）
+PROXY = os.getenv("YTDLP_PROXY", "http://127.0.0.1:7897")
 
 
 def load_state():
@@ -175,6 +177,7 @@ def download_soundcloud(track, folder):
 
     cmd = [
         "python3", "-m", "yt_dlp",
+        "--proxy", PROXY,
         "-f", "bestaudio",
         "--extract-audio",
         "--audio-format", "mp3",
@@ -194,6 +197,7 @@ def download_spotify_via_youtube(track, folder):
 
     cmd = [
         "python3", "-m", "yt_dlp",
+        "--proxy", PROXY,
         "--cookies-from-browser", "edge",
         "--js-runtimes", "node",
         "-f", "bestaudio/best",

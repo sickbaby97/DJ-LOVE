@@ -75,21 +75,21 @@ class DJLoveApp:
 
         btn_frame = tk.Frame(self.root, bg=BG)
         btn_frame.pack()
-        self.btn_all = tk.Button(
-            btn_frame, text="🆕 立即下载全部新收藏", font=("Helvetica", 14, "bold"),
+        self.btn_today = tk.Button(
+            btn_frame, text="📅 下载今日喜欢", font=("Helvetica", 14, "bold"),
             bg=ACCENT, fg="white", activebackground="#ff6aa8",
             activeforeground="white", relief="flat", cursor="hand2",
-            padx=24, pady=12, command=lambda: self.start_download(today=False))
-        self.btn_all.pack(pady=6)
-        tk.Label(btn_frame, text="下载所有还没下载的（含之前积压的）",
-                 font=("Helvetica", 10), fg="#7a6a9e", bg=BG).pack(pady=(0, 6))
-        self.btn_today = tk.Button(
-            btn_frame, text="📅 仅下载今日喜欢", font=("Helvetica", 14, "bold"),
-            bg=ACCENT2, fg="#06232b", activebackground="#8aecff",
-            activeforeground="#06232b", relief="flat", cursor="hand2",
             padx=24, pady=12, command=lambda: self.start_download(today=True))
         self.btn_today.pack(pady=6)
-        tk.Label(btn_frame, text="只下载今天点心的歌",
+        tk.Label(btn_frame, text="下载今天点心的歌 / Today's likes",
+                 font=("Helvetica", 10), fg="#7a6a9e", bg=BG).pack(pady=(0, 6))
+        self.btn_playlists = tk.Button(
+            btn_frame, text="☁️ 下载 SoundCloud 歌单", font=("Helvetica", 14, "bold"),
+            bg=ACCENT2, fg="#06232b", activebackground="#8aecff",
+            activeforeground="#06232b", relief="flat", cursor="hand2",
+            padx=24, pady=12, command=self.start_playlist_download)
+        self.btn_playlists.pack(pady=6)
+        tk.Label(btn_frame, text="批量下载你 SoundCloud 上的公开歌单",
                  font=("Helvetica", 10), fg="#7a6a9e", bg=BG).pack(pady=(0, 4))
 
         # ── 日志 ──
@@ -135,13 +135,24 @@ class DJLoveApp:
         if self.running:
             return
         self.running = True
-        self.btn_all.configure(state="disabled")
         self.btn_today.configure(state="disabled")
+        self.btn_playlists.configure(state="disabled")
         self._log(f"\n{'=' * 50}")
         mode = "下载今日喜欢" if today else "下载所有新收藏"
         self._log(f"▶ {mode}")
         self._set_status("下载中…")
         threading.Thread(target=self._worker, args=(today,), daemon=True).start()
+
+    def start_playlist_download(self):
+        if self.running:
+            return
+        self.running = True
+        self.btn_today.configure(state="disabled")
+        self.btn_playlists.configure(state="disabled")
+        self._log(f"\n{'=' * 50}")
+        self._log("▶ 下载 SoundCloud 歌单")
+        self._set_status("下载歌单中…")
+        threading.Thread(target=self._worker_playlists, daemon=True).start()
 
     def _worker(self, today):
         env = os.environ.copy()
@@ -171,6 +182,30 @@ class DJLoveApp:
         proc.wait()
         self.q.put(("done", proc.returncode))
 
+    def _worker_playlists(self):
+        """调用 music_weekly.py 一次，让它发现并下载新歌单。"""
+        env = os.environ.copy()
+        env["PATH"] = f"{Path.home()}/.local/bin:/usr/local/bin:/usr/bin:/bin:" + env.get("PATH", "")
+        env.pop("PYTHONPATH", None)
+        env_file = Path.home() / ".hermes" / ".env"
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    env[k.strip()] = v.strip()
+        # 用 --today 模式也只下今天的，但歌单功能会顺便触发
+        proc = subprocess.Popen(
+            [str(PYTHON), str(SCRIPT), "--today"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, env=env, bufsize=1)
+        for line in proc.stdout:
+            line = line.rstrip("\n")
+            if line.strip():
+                self.q.put(("log", line))
+        proc.wait()
+        self.q.put(("done", proc.returncode))
+
     def _poll_queue(self):
         try:
             while True:
@@ -179,8 +214,8 @@ class DJLoveApp:
                     self._log(data)
                 elif kind == "done":
                     self.running = False
-                    self.btn_all.configure(state="normal")
                     self.btn_today.configure(state="normal")
+                    self.btn_playlists.configure(state="normal")
                     if data == 0:
                         self._log("✅ 完成！")
                         self._set_status("完成 ✅")

@@ -101,7 +101,8 @@ def get_new_spotify_likes(state, today_only=False):
     return new_tracks
 
 
-def get_new_soundcloud_likes(state):
+def get_soundcloud_playlists(state):
+    """获取 SoundCloud 用户的所有公开歌单（playlist/set）。"""
     username = os.getenv("SOUNDCLOUD_USERNAME")
     if not username:
         return []
@@ -110,17 +111,17 @@ def get_new_soundcloud_likes(state):
         "python3", "-m", "yt_dlp",
         "--flat-playlist", "--dump-json",
         "--ignore-errors", "--no-progress",
-        f"https://soundcloud.com/{username}/likes",
+        f"https://soundcloud.com/{username}/sets",
     ]
 
-    print("[SoundCloud] 扫描 Likes ...")
+    print("[SoundCloud] 扫描歌单 ...")
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     except subprocess.TimeoutExpired:
         return []
 
-    known_ids = state.setdefault("soundcloud_ids", {})
-    new_tracks = []
+    known_ids = state.setdefault("soundcloud_playlist_ids", {})
+    playlists = []
 
     for line in result.stdout.strip().split("\n"):
         if not line:
@@ -132,17 +133,37 @@ def get_new_soundcloud_likes(state):
         sid = str(info.get("id", ""))
         if not sid or sid in known_ids:
             continue
-        # 注意：这里不标记 known_ids，下载成功后才标记
-        new_tracks.append({
+        known_ids[sid] = info.get("upload_date", "")
+        playlists.append({
             "id": sid,
             "title": info.get("title", "?"),
             "uploader": info.get("uploader", "?"),
             "webpage_url": info.get("webpage_url", ""),
-            "duration": info.get("duration"),
         })
 
-    print(f"[SoundCloud] {len(new_tracks)} 首新增")
-    return new_tracks
+    print(f"[SoundCloud] 发现 {len(playlists)} 个新歌单")
+    return playlists
+
+
+def download_soundcloud_playlist(track, folder):
+    """下载 SoundCloud 歌单里的所有曲目。"""
+    url = track.get("webpage_url", "")
+    if not url:
+        return False
+
+    cmd = [
+        "python3", "-m", "yt_dlp",
+        "--proxy", PROXY,
+        "-f", "bestaudio",
+        "--extract-audio",
+        "--audio-format", "mp3",
+        "--audio-quality", "320K",
+        "--embed-metadata",
+        "--output", f"{folder}/%(playlist)s/%(playlist_index)s - %(title)s.%(ext)s",
+        "--no-progress", "--quiet",
+        url,
+    ]
+    return _run_download(cmd)
 
 
 def _run_download(cmd, retries=2):
@@ -224,16 +245,15 @@ def main():
     mode = "📅 仅今日收藏" if today_only else "🆕 所有新收藏"
     print(f"\n📁 {folder.name}  ·  {mode}\n{'=' * 40}")
 
-    # ── SoundCloud (直接下载) ──
-    new_sc = get_new_soundcloud_likes(state)
+    # ── SoundCloud (下载歌单) ──
+    new_sc = get_soundcloud_playlists(state)
     sc_ok = 0
     for i, t in enumerate(new_sc):
         label = f"{t['uploader']} - {t['title']}"
         print(f"  [{i+1}/{len(new_sc)}] ☁️  {label[:60]}")
-        if download_soundcloud(t, folder):
+        if download_soundcloud_playlist(t, folder):
             sc_ok += 1
-            # 下载成功才标记，失败下次重试
-            state["soundcloud_ids"][t["id"]] = t.get("upload_date", "")
+            state["soundcloud_playlist_ids"][t["id"]] = t.get("upload_date", "")
         else:
             print(f"         ⚠️ 失败")
 
@@ -246,7 +266,6 @@ def main():
         print(f"  [{i+1}/{len(new_sp)}] 🎵 {label[:60]}")
         if download_spotify_via_youtube(t, folder):
             sp_ok += 1
-            # 下载成功才标记，失败下次重试
             state["spotify_ids"][t["id"]] = t["added_at"]
         else:
             print(f"         ⚠️ 失败")
@@ -272,7 +291,7 @@ def main():
                 lines.append(f"  {', '.join(t['artists'])} — {t['name']}")
             lines.append("")
         if new_sc:
-            lines.append(f"[SoundCloud] {sc_ok}/{len(new_sc)} 下载成功")
+            lines.append(f"[SoundCloud] {sc_ok}/{len(new_sc)} 个歌单下载成功")
             for t in new_sc:
                 lines.append(f"  {t['uploader']} — {t['title']}")
         summary.write_text("\n".join(lines), encoding="utf-8")
@@ -283,10 +302,12 @@ def main():
 
     total = len(new_sp) + len(new_sc)
     print(f"\n{'=' * 40}")
-    print(f"📊 新增 {total} 首")
-    print(f"   SoundCloud: {sc_ok}/{len(new_sc)} 下载成功")
-    print(f"   Spotify:    {sp_ok}/{len(new_sp)} 下载成功")
+    print(f"📊 新增 {total} 项")
+    print(f"   SoundCloud: {sc_ok}/{len(new_sc)} 个歌单下载成功")
+    print(f"   Spotify:    {sp_ok}/{len(new_sp)} 首下载成功")
     print(f"📁 {folder}")
+    if new_sc or new_sp:
+        print(f"📁 歌单保存在: {folder}")
     if new_sp and sp_ok < len(new_sp):
         print(f"💡 失败的 Spotify 歌曲见 Spotify歌单_URLs.txt")
 

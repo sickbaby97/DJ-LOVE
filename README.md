@@ -95,25 +95,19 @@ chmod +x ~/.local/bin/ffmpeg
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### 2. 配置 / Configure
+### 2. 首次配置 / First-time Setup
 
-创建 `~/.hermes/.env`（或其他位置，脚本会自动加载）：
-
-```bash
-# Spotify API 凭证 → https://developer.spotify.com/dashboard
-SPOTIFY_CLIENT_ID=your_client_id
-SPOTIFY_CLIENT_SECRET=your_client_secret
-SPOTIFY_REDIRECT_URI=http://127.0.0.1:8888
-
-# SoundCloud 用户名
-SOUNDCLOUD_USERNAME=your_username
-```
-
-#### Spotify 授权 / Auth
+运行向导，按提示输入 Spotify 凭证和 SoundCloud 用户名：
 
 ```bash
-python3 spotify_auth.py   # 打开浏览器 → 点「允许」
+djlove-setup
 ```
+
+向导会：
+- 自动检测本地代理（Clash/V2Ray）
+- 引导你创建 Spotify App 并填入 Client ID / Secret
+- 打开浏览器完成 Spotify OAuth 授权
+- 写入 `~/.hermes/.env`
 
 #### YouTube 下载 / YouTube Download
 

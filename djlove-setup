@@ -1,0 +1,3 @@
+#!/bin/bash
+# DJ-LOVE 首次配置向导
+exec /usr/local/bin/python3 ~/.hermes/scripts/djlove_setup.py

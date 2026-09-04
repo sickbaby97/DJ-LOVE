@@ -109,6 +109,7 @@ def get_soundcloud_playlists(state):
 
     cmd = [
         "python3", "-m", "yt_dlp",
+        "--proxy", PROXY,
         "--flat-playlist", "--dump-json",
         "--ignore-errors", "--no-progress",
         f"https://soundcloud.com/{username}/sets",
@@ -133,7 +134,7 @@ def get_soundcloud_playlists(state):
         sid = str(info.get("id", ""))
         if not sid or sid in known_ids:
             continue
-        known_ids[sid] = info.get("upload_date", "")
+        # 注意：只记录到待下载列表，不标记 known_ids，下载成功后才标记
         playlists.append({
             "id": sid,
             "title": info.get("title", "?"),
@@ -151,6 +152,14 @@ def download_soundcloud_playlist(track, folder):
     if not url:
         return False
 
+    # 清理可能残留的 .m4a（yt-dlp 转码前会先下载原始格式）
+    if folder.exists():
+        for f in folder.rglob("*.m4a"):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
     cmd = [
         "python3", "-m", "yt_dlp",
         "--proxy", PROXY,
@@ -161,16 +170,17 @@ def download_soundcloud_playlist(track, folder):
         "--embed-metadata",
         "--output", f"{folder}/%(playlist)s/%(playlist_index)s - %(title)s.%(ext)s",
         "--no-progress", "--quiet",
+        "--no-post-overwrites",  # 避免重复转码
         url,
     ]
-    return _run_download(cmd)
+    return _run_download(cmd, timeout=900)  # 歌单可能很大，放宽到 15 分钟
 
 
-def _run_download(cmd, retries=2):
+def _run_download(cmd, retries=2, timeout=180):
     """运行下载命令，失败自动重试（应对 429 限流/网络波动）。"""
     for attempt in range(retries):
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
             if r.returncode == 0:
                 return True
             if attempt < retries - 1:
@@ -185,7 +195,7 @@ def _run_download(cmd, retries=2):
                 print("         ⏱️ 超时，重试...")
                 time.sleep(5)
             else:
-                print("         ⏱️ 超时(180s)")
+                print("         ⏱️ 超时({timeout}s)")
                 return False
     return False
 
